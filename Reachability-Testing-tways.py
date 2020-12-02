@@ -52,60 +52,6 @@ def no_index(start,finish,t,event,R):
             continue
     return False
 
-    
-
-def construct_race_table(Q,Qs,Qr,race_set):
-    R=[] #create race_set
-    D=[] #number of race_set
-    heading=[] #{r1,r2,....r}
-
-    R.append('')
-    D.append('')
-    heading.append('dummy')
-    # set R,D
-    for key in race_set.keys():
-        if len(race_set[key])>0 and Q[Q['ID']==key].iloc[0].coler=='white':
-            R.append(key) # raceのあるイベントを追加
-            D.append(len(race_set[key])) #raceの数を追加
-            heading.append(key) # r
-    table=pd.DataFrame([],columns=heading)
-
-    t=np.zeros(len(R)) #raceの数分の配列 #t[0]はダミー
-
-    while True:
-
-        results=[]
-
-        max_index=''
-        for i in range(len(t)-1,0,-1):
-            if t[i]<D[i] and t[i]!=-1:
-                max_index=i
-                break
-        if max_index=='':
-            break
-        t[i]+=1
-
-        if t[i]==1: #just changed t[i] from 0 to 1
-
-            for j in range(i+1,len(R)):
-                if t[j]!=-1 and (Qr[Qr.ID==R[i]].iloc[0].ID in cstruct(Qr[Qr.ID==R[j]].iloc[0],[])):
-
-                    t[j]=-1
-
-        for j in range(i+1,len(R)):
-            if(t[j]==D[j]):
-                t[j]=0 #just change t[j] from dj to 0
-
-                for k in range(j+1,len(R)):
-                    if t[k]==-1 and Qr[Qr.ID==R[j]].iloc[0].ID in cstruct(Qr[Qr.ID==R[k]].iloc[0],[]) and no_index(1,k,t,Qr[(Qr.ID==R[k])].iloc[0],R):
-                        t[k]=0
-        #let s be the t[i] sending event in race_set(ri)
-        s= race_set[R[i]][int(t[i])-1] 
-
-
-        if no_index(1,len(R)-1,t,Qs[(Qs.ID==s)].iloc[0],R)==False:
-            table=table.append(pd.Series(t,index=table.columns),ignore_index=True)
-    return table.drop('dummy',axis=1)
 
 ## =======race作成のための関数==========
 def str_to_list(string):
@@ -303,9 +249,7 @@ def expand_table(table):
                         table=table.fillna(0)
     return table
 
-
-
-
+'''この関数の用途を忘れた
 def cstruct_check(df):
     global number
     global Qs
@@ -343,7 +287,7 @@ def cstruct_check(df):
             pass
 
         return df
-
+'''
 
 
 
