@@ -6,12 +6,15 @@ Reachability testing derives test sequences automatically and on-the-fly, withou
 
 ## 変数の説明
 
+### 全体の流れ
+tway法のtとSYN-sequenceのCSVファイルをインポートすることで、race_setとテストケースを作成します。
+
 ### t_way
-t-way法のtの数
+t-way法のtの数。1の場合ペアワイズ法を適用しないアルゴリズムが発火
 
 ### Q,Qs,Qr
 シーケンスのテーブルQsが送信イベント、Qrが受信イベント
-Q[0]が初期値
+Q[0]が初期値のSYN-sequence
 
 
 ## 関数の説明
@@ -23,6 +26,13 @@ Q[0]が初期値
 |`str_to_list`|データ加工用。pandasの要素にリストを入れるとstrとして認識されるので加工している|
 |`creating_race_set`|シーケンスからrace_setを作成する|
 |`expand_table`|ペアワイズを適用するための関数|
+
+###race_set作成のアルゴリズム
+条件
+1. rと同じタスクで起こっている
+2. rのcontrol-structureにはいっていない
+2. 対象のイベントより前に起こっている
+上記を満たすrイベントのペアをrのracesetとする
 
 
 ## References
