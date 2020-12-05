@@ -27,7 +27,7 @@ Q[0]が初期値のSYN-sequence
 |`creating_race_set`|シーケンスからrace_setを作成する|
 |`expand_table`|ペアワイズを適用するための関数|
 
-###race_set作成のアルゴリズム
+### race_set作成のアルゴリズム
 条件
 1. rと同じタスクで起こっている
 2. rのcontrol-structureにはいっていない
