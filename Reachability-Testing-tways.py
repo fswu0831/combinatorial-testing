@@ -1,3 +1,7 @@
+t_way=1
+RECEIVE_SHEET_NAME='SYN-res.csv'
+SEND_SHEET_NAME='SYN-snd.csv'
+
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -121,7 +125,6 @@ def remove_race(race1,race2): #race_set(r,Q)=race_set(r,Q)-race_set(r,V)
 
 ## =======race削除のための関数==========
 
-
 def construct_race_table(Q,Qs,Qr,race_set):
     global t_way
     R=[] #create race_set
@@ -178,7 +181,6 @@ def construct_race_table(Q,Qs,Qr,race_set):
         if no_index(1,len(R)-1,t,Qs[(Qs.ID==s)].iloc[0],R)==False:
             table=table.append(pd.Series(t,index=table.columns),ignore_index=True)
     return table.drop('dummy',axis=1)
-
 
 def expand_table(table):
     global Qr
@@ -292,7 +294,6 @@ def cstruct_check(df):
 
 
 #ペアワイズのための関数
-t_way=1
 
 
 #============ここから定義============
@@ -306,8 +307,8 @@ Qr=[pd.DataFrame({})]
 
 
 #Q is SYN-sequence
-Qr[0]=pd.read_csv('res.csv',names=heading_res)
-Qs[0]=pd.read_csv('sen.csv',names=heading_snd)
+Qr[0]=pd.read_csv(RECEIVE_SHEET_NAME,names=heading_res)
+Qs[0]=pd.read_csv(SEND_SHEET_NAME,names=heading_snd)
 
 
 
@@ -354,13 +355,10 @@ s_last_index=len(Qs_unique)+1 #+1で新しいindexをそのまま付与
 
 
 #====メイン関数====
-
-if t_way==2:
-    table=construct_race_table(Q[0],Qs[0],Qr[0],race_set)
-else:
-    table=t_way_table(Q[0],Qs[0],Qr[0],race_set)
+table=construct_race_table(Q[0],Qs[0],Qr[0],race_set)
+if t_way>1:
     table=expand_table(table)
-    
+
 table=table.astype('int64')
 columns=list(table.columns)
 check_digit=1
