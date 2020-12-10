@@ -1,15 +1,3 @@
-t_way=2
-
-#RECEIVE_SHEET_NAME='SYN-res.csv'
-#SEND_SHEET_NAME='SYN-snd.csv'
-
-RECEIVE_SHEET_NAME='res.csv'
-SEND_SHEET_NAME='sen.csv'
-
-
-#RECEIVE_SHEET_NAME='SYN-sequence-receive.csv'
-#SEND_SHEET_NAME='SYN-sequence-send.csv'
-
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -21,6 +9,203 @@ from collections import OrderedDict
 import time
 import pprint
 warnings.simplefilter('ignore')
+
+
+#============ここから設定============
+t_way=2
+
+#RECEIVE_SHEET_NAME='SYN-res.csv'
+#SEND_SHEET_NAME='SYN-snd.csv'
+
+RECEIVE_SHEET_NAME='res.csv'
+SEND_SHEET_NAME='sen.csv'
+
+
+#RECEIVE_SHEET_NAME='SYN-sequence-receive.csv'
+#SEND_SHEET_NAME='SYN-sequence-send.csv'
+#============ここまで設定============
+
+
+#ペアワイズのための関数
+
+
+#============ここから定義============
+
+number=0 # 実験の回数
+heading_res=('Thread','Port','Event','Index')
+heading_snd=('Thread','Port','Event','Index')
+
+Qs=[pd.DataFrame({})]
+Qr=[pd.DataFrame({})]
+
+
+#Q is SYN-sequence
+Qr[0]=pd.read_csv(RECEIVE_SHEET_NAME,names=heading_res)
+Qs[0]=pd.read_csv(SEND_SHEET_NAME,names=heading_snd)
+
+Qr[0]['Thread']=Qr[0]['Thread'].map(lambda x:'T'+str(x))
+Qs[0]['Thread']=Qs[0]['Thread'].map(lambda x:'T'+str(x))
+
+
+r_list=list(range(1,len(Qr[0])+1))
+r_list=list(map(lambda x:'r'+str(x),r_list)) #['r1', 'r2', 'r3', 'r4']
+s_list=list(range(1,len(Qs[0])+1))
+s_list=list(map(lambda x:'s'+str(x),s_list)) #['s1', 's2', 's3', 's4']
+
+Qr[0].insert(0,'ID',r_list) #attach the name of event
+Qs[0].insert(0,'ID',s_list) #attach the name of event
+
+## raceの作成
+race_set={}
+
+start = time.time()
+
+race_set=creating_race_set(race_set)
+elapsed_time = time.time() - start
+print ("Creating race set took:{:.4g}".format(elapsed_time) + "[sec]")
+pprint.pprint((race_set))
+Qr[0]['coler']='white'
+
+Q=[pd.DataFrame({})] #Q is SYN-sequence
+Q[0]=pd.merge(Qr[0],Qs[0],how='outer')
+
+
+r_list=[]
+s_list=[]
+check_digit=0
+
+for i in range(0,len(Qr[0])):
+    r_list.append(cstruct(Qr[0].iloc[i],[]))
+    s_list.append(cstruct(Qs[0].iloc[i],[]))
+#r_list.extend(s_list)
+Q_unique=pd.DataFrame({})
+Qr_unique=Qr[0].copy()
+Qs_unique=Qs[0].copy()
+Qr_unique.insert(len(Qr_unique.columns),'cstruct',r_list)
+Qs_unique.insert(len(Qs_unique.columns),'cstruct',s_list)
+#Q_unique=pd.merge(Qr_unique,Qs_unique,how='outer')
+#Q_unique.insert(len(Qs_unique.columns),'cstruct',r_list) #保存するようのテーブル
+
+r_last_index=len(Qr_unique)+1 #それぞれの新しいインデックスを付与するための変数→初期化
+s_last_index=len(Qs_unique)+1 #+1で新しいindexをそのまま付与
+
+#============ここまで定義============
+
+
+
+#====メイン関数====
+start = time.time()
+table=construct_race_table(Q[0],Qs[0],Qr[0],race_set)
+
+
+if t_way>1:
+    table=expand_table(table)
+elapsed_time = time.time() - start
+print ("Creating race table took:{:.4g}".format(elapsed_time) + "[sec]")
+
+table=table.astype('int64')
+columns=list(table.columns)
+check_digit=1
+
+start = time.time()
+for number in tqdm(range(0,len(table))):
+    Q.append(pd.DataFrame({})) #新しいテーブルを作成
+    Qs.append(pd.DataFrame({}))
+    Qr.append(pd.DataFrame({}))
+    Q[number+1]=Q[0].copy()
+    Qs[number+1]=Qs[0].copy()
+    Qr[number+1]=Qr[0].copy()
+    for key in range(0,len(columns)): # 列方向のループr1→r3
+        if table.iloc[number][columns[key]]>0: #race_set の交換
+
+            #Q[i+1]のテーブルを修正
+            change_event=Qr[number+1][Qr[number+1]['ID']==columns[key]].iloc[0].ID # receiveの交換するやつr3
+            change_event_number=Qr[number+1][Qr[number+1]['ID']==columns[key]].iloc[0].name #r3の行番号→2
+            new_partner=race_set[Q[number+1][Q[number+1]['ID']==columns[key]].iloc[0].ID][int(table.iloc[number][columns[key]])-1] #sendの新しいパートナー s4
+            new_partner_number=Qs[number+1][Qs[number+1]['ID']==new_partner].iloc[0].name #s4の行番号→3
+            
+            
+            ## QSのindexを振りなおす処理
+            new_index=[]
+            for j in range(0,len(Qr[number+1])):
+                if j==change_event_number:
+                    new_index.append(new_partner_number)
+                elif j==new_partner_number:
+                    new_index.append(change_event_number)
+                else:
+                    new_index.append(j)
+
+            Qs[number+1]['new_index']=new_index
+            Qs[number+1]=Qs[number+1].set_index('new_index')
+            Qs[number+1].sort_index(inplace=True)
+            
+            Q[number+1]=pd.merge(Qr[number+1],Qs[number+1],how='outer')
+            
+            #==========Qrの重複追加作業=================
+            
+            for index,row in Qr[number+1].iterrows():
+                results=cstruct(Qr[number+1].iloc[index],[])
+                judge=False
+                if results: #空だったらnot 
+                    for index2,row2 in Qr_unique.iterrows():
+                        if results==Qr_unique.at[index2,'cstruct']:
+                            new_index=index2
+                            judge=True
+                            break
+                    if not judge: #Falseだったら判定
+                        Qr[number+1].at[index,'ID']='r'+str(r_last_index)
+                        #Qr[number+1].at[index,'cstruct']=results
+                        r_last_index+=1
+                        temp=list(Qr[number+1].iloc[index])
+                        temp.append(results)
+                        temp=pd.Series(temp,index=Qr_unique.columns,name=len(Qr_unique))
+                        #temp=pd.DataFrame(,columns=Qr_unique.columns)
+                        #Qr_unique.append(temp,ignore_index=False)
+                        #pd.concat([Qr_unique,temp],axis=0)
+                        Qr_unique.loc[len(Qr_unique)]=temp
+                    else:
+                        Qr[number+1].iloc[index]=Qr_unique.iloc[new_index]
+                else:
+                    pass
+            
+            #==========Qsの重複追加作業=================
+            
+            
+            for index,row in Qs[number+1].iterrows():
+                results=cstruct(Qs[number+1].iloc[index],[])
+                judge=False
+                if results: #空だったらnot 
+                    for index2,row2 in Qs_unique.iterrows():
+                        if results==Qs_unique.at[index2,'cstruct']:
+                            new_index=index2
+                            judge=True
+                            break
+                    if not judge: #Falseだったら判定
+                        Qs[number+1].at[index,'ID']='s'+str(s_last_index)
+                        #Qr[number+1].at[index,'cstruct']=results
+                        s_last_index+=1
+                        temp=list(Qs[number+1].iloc[index])
+                        temp.append(results)
+                        temp=pd.Series(temp,index=Qs_unique.columns,name=len(Qs_unique))
+                        #temp=pd.DataFrame(,columns=Qr_unique.columns)
+                        #Qr_unique.append(temp,ignore_index=False)
+                        #pd.concat([Qr_unique,temp],axis=0)
+                        Qs_unique.loc[len(Qs_unique)]=temp
+                    else:
+                        Qs[number+1].iloc[index]=Qs_unique.iloc[new_index]
+                else:
+                    pass
+                 
+                
+            #Qr_unique.append(cstruct_results[0],ignore_index=True) # 戻り値を既存の表に追加
+            #Qs_unique.append(cstruct_results[1],ignore_index=True)
+            
+            Q[number+1]=pd.merge(Qr[number+1],Qs[number+1],how='outer')
+            Q[number+1]=Q[number+1].drop('coler',axis=1)
+Q[0]=Q[0].drop('coler',axis=1)
+elapsed_time = time.time() - start
+print ("Creating test case took:{:.4g}".format(elapsed_time) + "[sec]")
+print('The number of Test Case is {}.'.format(len(Q)))
 
 def cstruct(event,results):
     global Q
@@ -271,184 +456,5 @@ def expand_table(table):
     return table
 
 
-#ペアワイズのための関数
 
-
-#============ここから定義============
-
-number=0 # 実験の回数
-heading_res=('Thread','Port','Event','Index')
-heading_snd=('Thread','Port','Event','Index')
-
-Qs=[pd.DataFrame({})]
-Qr=[pd.DataFrame({})]
-
-
-#Q is SYN-sequence
-Qr[0]=pd.read_csv(RECEIVE_SHEET_NAME,names=heading_res)
-Qs[0]=pd.read_csv(SEND_SHEET_NAME,names=heading_snd)
-
-Qr[0]['Thread']=Qr[0]['Thread'].map(lambda x:'T'+str(x))
-Qs[0]['Thread']=Qs[0]['Thread'].map(lambda x:'T'+str(x))
-
-
-r_list=list(range(1,len(Qr[0])+1))
-r_list=list(map(lambda x:'r'+str(x),r_list)) #['r1', 'r2', 'r3', 'r4']
-s_list=list(range(1,len(Qs[0])+1))
-s_list=list(map(lambda x:'s'+str(x),s_list)) #['s1', 's2', 's3', 's4']
-
-Qr[0].insert(0,'ID',r_list) #attach the name of event
-Qs[0].insert(0,'ID',s_list) #attach the name of event
-
-## raceの作成
-race_set={}
-
-start = time.time()
-
-race_set=creating_race_set(race_set)
-elapsed_time = time.time() - start
-print ("Creating race set took:{:.4g}".format(elapsed_time) + "[sec]")
-pprint.pprint((race_set))
-Qr[0]['coler']='white'
-
-Q=[pd.DataFrame({})] #Q is SYN-sequence
-Q[0]=pd.merge(Qr[0],Qs[0],how='outer')
-
-
-r_list=[]
-s_list=[]
-check_digit=0
-
-for i in range(0,len(Qr[0])):
-    r_list.append(cstruct(Qr[0].iloc[i],[]))
-    s_list.append(cstruct(Qs[0].iloc[i],[]))
-#r_list.extend(s_list)
-Q_unique=pd.DataFrame({})
-Qr_unique=Qr[0].copy()
-Qs_unique=Qs[0].copy()
-Qr_unique.insert(len(Qr_unique.columns),'cstruct',r_list)
-Qs_unique.insert(len(Qs_unique.columns),'cstruct',s_list)
-#Q_unique=pd.merge(Qr_unique,Qs_unique,how='outer')
-#Q_unique.insert(len(Qs_unique.columns),'cstruct',r_list) #保存するようのテーブル
-
-r_last_index=len(Qr_unique)+1 #それぞれの新しいインデックスを付与するための変数→初期化
-s_last_index=len(Qs_unique)+1 #+1で新しいindexをそのまま付与
-
-#============ここまで定義============
-
-
-
-#====メイン関数====
-start = time.time()
-table=construct_race_table(Q[0],Qs[0],Qr[0],race_set)
-
-
-if t_way>1:
-    table=expand_table(table)
-elapsed_time = time.time() - start
-print ("Creating race table took:{:.4g}".format(elapsed_time) + "[sec]")
-
-table=table.astype('int64')
-columns=list(table.columns)
-check_digit=1
-
-start = time.time()
-for number in tqdm(range(0,len(table))):
-    Q.append(pd.DataFrame({})) #新しいテーブルを作成
-    Qs.append(pd.DataFrame({}))
-    Qr.append(pd.DataFrame({}))
-    Q[number+1]=Q[0].copy()
-    Qs[number+1]=Qs[0].copy()
-    Qr[number+1]=Qr[0].copy()
-    for key in range(0,len(columns)): # 列方向のループr1→r3
-        if table.iloc[number][columns[key]]>0: #race_set の交換
-
-            #Q[i+1]のテーブルを修正
-            change_event=Qr[number+1][Qr[number+1]['ID']==columns[key]].iloc[0].ID # receiveの交換するやつr3
-            change_event_number=Qr[number+1][Qr[number+1]['ID']==columns[key]].iloc[0].name #r3の行番号→2
-            new_partner=race_set[Q[number+1][Q[number+1]['ID']==columns[key]].iloc[0].ID][int(table.iloc[number][columns[key]])-1] #sendの新しいパートナー s4
-            new_partner_number=Qs[number+1][Qs[number+1]['ID']==new_partner].iloc[0].name #s4の行番号→3
-            
-            
-            ## QSのindexを振りなおす処理
-            new_index=[]
-            for j in range(0,len(Qr[number+1])):
-                if j==change_event_number:
-                    new_index.append(new_partner_number)
-                elif j==new_partner_number:
-                    new_index.append(change_event_number)
-                else:
-                    new_index.append(j)
-
-            Qs[number+1]['new_index']=new_index
-            Qs[number+1]=Qs[number+1].set_index('new_index')
-            Qs[number+1].sort_index(inplace=True)
-            
-            Q[number+1]=pd.merge(Qr[number+1],Qs[number+1],how='outer')
-            
-            #==========Qrの重複追加作業=================
-            
-            for index,row in Qr[number+1].iterrows():
-                results=cstruct(Qr[number+1].iloc[index],[])
-                judge=False
-                if results: #空だったらnot 
-                    for index2,row2 in Qr_unique.iterrows():
-                        if results==Qr_unique.at[index2,'cstruct']:
-                            new_index=index2
-                            judge=True
-                            break
-                    if not judge: #Falseだったら判定
-                        Qr[number+1].at[index,'ID']='r'+str(r_last_index)
-                        #Qr[number+1].at[index,'cstruct']=results
-                        r_last_index+=1
-                        temp=list(Qr[number+1].iloc[index])
-                        temp.append(results)
-                        temp=pd.Series(temp,index=Qr_unique.columns,name=len(Qr_unique))
-                        #temp=pd.DataFrame(,columns=Qr_unique.columns)
-                        #Qr_unique.append(temp,ignore_index=False)
-                        #pd.concat([Qr_unique,temp],axis=0)
-                        Qr_unique.loc[len(Qr_unique)]=temp
-                    else:
-                        Qr[number+1].iloc[index]=Qr_unique.iloc[new_index]
-                else:
-                    pass
-            
-            #==========Qsの重複追加作業=================
-            
-            
-            for index,row in Qs[number+1].iterrows():
-                results=cstruct(Qs[number+1].iloc[index],[])
-                judge=False
-                if results: #空だったらnot 
-                    for index2,row2 in Qs_unique.iterrows():
-                        if results==Qs_unique.at[index2,'cstruct']:
-                            new_index=index2
-                            judge=True
-                            break
-                    if not judge: #Falseだったら判定
-                        Qs[number+1].at[index,'ID']='s'+str(s_last_index)
-                        #Qr[number+1].at[index,'cstruct']=results
-                        s_last_index+=1
-                        temp=list(Qs[number+1].iloc[index])
-                        temp.append(results)
-                        temp=pd.Series(temp,index=Qs_unique.columns,name=len(Qs_unique))
-                        #temp=pd.DataFrame(,columns=Qr_unique.columns)
-                        #Qr_unique.append(temp,ignore_index=False)
-                        #pd.concat([Qr_unique,temp],axis=0)
-                        Qs_unique.loc[len(Qs_unique)]=temp
-                    else:
-                        Qs[number+1].iloc[index]=Qs_unique.iloc[new_index]
-                else:
-                    pass
-                 
-                
-            #Qr_unique.append(cstruct_results[0],ignore_index=True) # 戻り値を既存の表に追加
-            #Qs_unique.append(cstruct_results[1],ignore_index=True)
-            
-            Q[number+1]=pd.merge(Qr[number+1],Qs[number+1],how='outer')
-            Q[number+1]=Q[number+1].drop('coler',axis=1)
-Q[0]=Q[0].drop('coler',axis=1)
-elapsed_time = time.time() - start
-print ("Creating test case took:{:.4g}".format(elapsed_time) + "[sec]")
-print('The number of Test Case is {}.'.format(len(Q)))
 
