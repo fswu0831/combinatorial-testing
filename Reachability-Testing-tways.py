@@ -1,6 +1,14 @@
-t_way=1
-RECEIVE_SHEET_NAME='SYN-res.csv'
-SEND_SHEET_NAME='SYN-snd.csv'
+t_way=2
+
+#RECEIVE_SHEET_NAME='SYN-res.csv'
+#SEND_SHEET_NAME='SYN-snd.csv'
+
+RECEIVE_SHEET_NAME='res.csv'
+SEND_SHEET_NAME='sen.csv'
+
+
+#RECEIVE_SHEET_NAME='SYN-sequence-receive.csv'
+#SEND_SHEET_NAME='SYN-sequence-send.csv'
 
 import pandas as pd
 import numpy as np
@@ -8,6 +16,10 @@ from tqdm import tqdm
 import re
 from IPython.display import display
 import warnings
+from allpairspy import AllPairs
+from collections import OrderedDict
+import time
+import pprint
 warnings.simplefilter('ignore')
 
 def cstruct(event,results):
@@ -37,7 +49,7 @@ def cstruct(event,results):
             results.extend(cstruct(event,results))
         else:
             results.append(temp['ID'])
-            send=Qs[number+magic].loc[temp.name]
+            send=Qs[number+magic].iloc[temp.name]
             results.append(send['ID'])
             results.extend(cstruct(send,results))
     return list(set(results))
@@ -104,7 +116,7 @@ def creating_race_set(race_set):
 
         if str_to_list(port)[0] in str_to_list(next_event.Port):#ポートが一致    
             # race_setについか
-            race_set[pair_event.ID].append(race.ID) #ここはサンプル
+            race_set[pair_event.ID].append(race.ID) 
     return race_set
 
 ## =======race作成のための関数==========
@@ -187,7 +199,7 @@ def expand_table(table):
     global t_way
     global race_set
     
-    for way in range(t_way,len(Qr[0])): #1列ずつ足していくためのループ
+    for way in tqdm(range(t_way,len(Qr[0]))): #1列ずつ足していくためのループ
         new_event=Qr[0].iloc[way]
 
         if (len(race_set[Qr[0].iloc[way].ID]))>0: #raceがあるかどうか確認
@@ -201,6 +213,13 @@ def expand_table(table):
                 heading2=pi[i].columns
                 for j in range(len(heading2)):              
                     new_row=pd.Series([])
+                    parameters_dict={}
+                    heading=table.columns.values
+                    for i2 in range(len(heading)):
+                        parameters_dict[heading[i2]]=[]
+                        for j2 in range(len(race_set[heading[i2]])+1):
+                            parameters_dict[heading[i2]].append(j2)
+                    parameters=OrderedDict(parameters_dict)
                     for k, pairs in enumerate(AllPairs(parameters)):
                         new_row[len(new_row)]=pairs[j]
                     pi[i][heading2[j]]=new_row
@@ -251,47 +270,6 @@ def expand_table(table):
                         table=table.fillna(0)
     return table
 
-'''この関数の用途を忘れた
-def cstruct_check(df):
-    global number
-    global Qs
-    global Qr
-    global Q
-    global r_last_index
-    global s_last_index
-        
-    for index,row in Qr[number+1].iterrows():
-        ##ここからはrの処理
-        results=[]
-        results=cstruct(Qr[number+1].iloc[index],[])
-        judge=False
-
-        if results: #空だったらnot 
-            for index2,row2 in df.iterrows():
-                if results==df.at[index2,'cstruct']:
-                    new_index=index2
-                    judge=True
-                    break
-            # Trueだったら被りあり　Falseだったら被りなし
-
-            #共通部分の処理
-            if not judge: #Falseだったら判定
-                Qr[number+1].at[index,'ID']='r'+str(r_last_index)
-                #Qr[number+1].at[index,'cstruct']=results
-                r_last_index+=1
-                temp=list(Qr[number+1].iloc[index])
-                temp.append(results)
-                temp=pd.Series(temp,index=Qr_temp.columns,name=len(df))
-                df.loc[len(df)]=temp
-            else:
-                Qr[number+1].iloc[index]=df.iloc[new_index]
-        else: #空だったらなにもしない
-            pass
-
-        return df
-'''
-
-
 
 #ペアワイズのための関数
 
@@ -310,7 +288,8 @@ Qr=[pd.DataFrame({})]
 Qr[0]=pd.read_csv(RECEIVE_SHEET_NAME,names=heading_res)
 Qs[0]=pd.read_csv(SEND_SHEET_NAME,names=heading_snd)
 
-
+Qr[0]['Thread']=Qr[0]['Thread'].map(lambda x:'T'+str(x))
+Qs[0]['Thread']=Qs[0]['Thread'].map(lambda x:'T'+str(x))
 
 
 r_list=list(range(1,len(Qr[0])+1))
@@ -323,8 +302,13 @@ Qs[0].insert(0,'ID',s_list) #attach the name of event
 
 ## raceの作成
 race_set={}
-race_set=creating_race_set(race_set)
 
+start = time.time()
+
+race_set=creating_race_set(race_set)
+elapsed_time = time.time() - start
+print ("Creating race set took:{:.4g}".format(elapsed_time) + "[sec]")
+pprint.pprint((race_set))
 Qr[0]['coler']='white'
 
 Q=[pd.DataFrame({})] #Q is SYN-sequence
@@ -355,15 +339,20 @@ s_last_index=len(Qs_unique)+1 #+1で新しいindexをそのまま付与
 
 
 #====メイン関数====
+start = time.time()
 table=construct_race_table(Q[0],Qs[0],Qr[0],race_set)
+
+
 if t_way>1:
     table=expand_table(table)
+elapsed_time = time.time() - start
+print ("Creating race table took:{:.4g}".format(elapsed_time) + "[sec]")
 
 table=table.astype('int64')
 columns=list(table.columns)
 check_digit=1
 
-
+start = time.time()
 for number in tqdm(range(0,len(table))):
     Q.append(pd.DataFrame({})) #新しいテーブルを作成
     Qs.append(pd.DataFrame({}))
@@ -457,6 +446,9 @@ for number in tqdm(range(0,len(table))):
             #Qs_unique.append(cstruct_results[1],ignore_index=True)
             
             Q[number+1]=pd.merge(Qr[number+1],Qs[number+1],how='outer')
-
-print('The number of Test Case is {}'.format(len(Q)))
+            Q[number+1]=Q[number+1].drop('coler',axis=1)
+Q[0]=Q[0].drop('coler',axis=1)
+elapsed_time = time.time() - start
+print ("Creating test case took:{:.4g}".format(elapsed_time) + "[sec]")
+print('The number of Test Case is {}.'.format(len(Q)))
 
