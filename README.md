@@ -20,8 +20,8 @@ QはQrとQsを縦方向に結合したもの。
 Q[0]が初期値のSYN-sequence
 
 **Qr**
-||ID||PORT|EVNT|INDEX|
-|:---| :--- | :--- | :--- | :---|
+||ID|THREAD|PORT|EVNT|INDEX|
+|:---| :--- | :--- | :--- | :---| :---|
 |0|r1|T2|p2|res|1|
 |1|r2|T2|p2|res|2|
 |2|r3|T3|p2|res|1|
@@ -29,8 +29,8 @@ Q[0]が初期値のSYN-sequence
 |4|r5|T2|p2|res|3|
 
 **Qs**
-||ID||PORT|EVNT|INDEX|
-|:---| :--- | :--- | :--- | :---|
+||ID|THREAD|PORT|EVNT|INDEX|
+|:---| :--- | :--- | :--- | :---| :---|
 |0|r1|T1|p2|send|1|
 |1|r2|T3|p2|send|1|
 |2|r3|T4|p2|send|1|
